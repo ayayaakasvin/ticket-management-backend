@@ -18,7 +18,7 @@ type PostgreSQL struct {
 func NewPostgreSQLConnection(dbConfig config.StorageConfig, shutdownChannel inner.ShutdownChannel) *PostgreSQL {
 	psql := new(PostgreSQL)
 
-	connection, err := sql.Open("postgres", connString(dbConfig))
+	connection, err := sql.Open("postgres", dbConfig.URL)
 	if err != nil {
 		msg := fmt.Sprintf("failed to connect to db: %v\n", err)
 		shutdownChannel.Send(inner.ShutdownMessage, origin, msg)
@@ -34,8 +34,4 @@ func NewPostgreSQLConnection(dbConfig config.StorageConfig, shutdownChannel inne
 	}
 
 	return psql
-}
-
-func connString(dbConfig config.StorageConfig) string {
-	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", dbConfig.Host, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.DatabaseName)
 }

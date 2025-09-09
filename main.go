@@ -23,7 +23,10 @@ func main() {
 	}()
 
 	repo := postgresql.NewPostgreSQLConnection(cfg.Database, shutdownChan)
+	logger.Info("Postgresql conn has been established")
+
 	cache := valkey.NewValkeyClient(cfg.Valkey, shutdownChan)
+	logger.Info("Valkey conn has been established")
 
 	wg := new(sync.WaitGroup)
 	wg.Add(1) // to wait for server

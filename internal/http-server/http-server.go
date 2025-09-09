@@ -81,20 +81,29 @@ func (s *ServerApp) setupServer() {
 	s.server.ReadTimeout = s.cfg.Timeout
 	s.server.WriteTimeout = s.cfg.Timeout
 
+	s.logger.Info("Server has been set up")
+}
+
+func (s *ServerApp) setupLightMux() {
+	s.lmux = lightmux.NewLightMux(s.server)
+
 	mws := middlewares.NewHTTPMiddlewares(s.logger, s.cache)
 	handlers := handlers.NewHTTPHandlers(s.authRepo, s.cache, s.logger)
+
+	s.lmux.Use(mws.RecoverMiddleware)
+	s.lmux.Use(mws.LoggerMiddleware)
+
+	s.lmux.NewRoute("/ping").Handle(http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		w.Write([]byte("pong"))
+	})
+	// s.lmux.NewRoute("/panic").Handle(http.MethodGet, handlers.PanicHandler())
 
 	authGroup := s.lmux.NewGroup("/api")
 	authGroup.NewRoute("/login").Handle(http.MethodPost, handlers.LogIn())
 	authGroup.NewRoute("/register").Handle(http.MethodPost, handlers.Register())
 	authGroup.NewRoute("/logout", mws.JWTAuthMiddleware).Handle(http.MethodDelete, handlers.LogOut())
 	authGroup.NewRoute("/refresh").Handle(http.MethodPost, handlers.RefreshTheToken())
-
-	s.logger.Info("Server has been set up")
-}
-
-func (s *ServerApp) setupLightMux() {
-	s.lmux = lightmux.NewLightMux(s.server)
 
 	s.logger.Info("LightMux has been set up")
 }

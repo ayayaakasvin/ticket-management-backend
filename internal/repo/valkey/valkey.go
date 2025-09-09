@@ -3,6 +3,7 @@ package valkey
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/ayayaakasvin/oneflick-ticket/internal/config"
@@ -18,20 +19,30 @@ type Cache struct {
 }
 
 func NewValkeyClient(cfg config.RedisConfig, shutdownChan inner.ShutdownChannel) inner.Cache {
-	conn := redis.NewClient(
-		&redis.Options{
-			Addr:     fmt.Sprintf("%s:%s", cfg.Host, cfg.Port), // Redis server address
-			Password: cfg.Password,                             // No password set
-			Username: cfg.User,
-			DB:       0, // Default DB)
-		},
-	)
+	ctx := context.Background()
+	opt, err := redis.ParseURL(cfg.URL)
+	log.Printf("URL: %s", cfg.URL)
+	if err != nil {
+		msg := fmt.Sprintf("failed to parse Redis URL: %v", err)
+		shutdownChan.Send(inner.ShutdownMessage, origin, msg)
+		return nil
+	}
 
-	if err := conn.Ping(context.Background()).Err(); err != nil {
+	// for latency
+	opt.DialTimeout = 30 * time.Second // Increased for Singapore region
+    opt.ReadTimeout = 30 * time.Second
+    opt.WriteTimeout = 30 * time.Second
+    opt.PoolSize = 10
+    opt.PoolTimeout = 30 * time.Second
+
+	conn := redis.NewClient(opt)
+	if err := conn.Ping(ctx).Err(); err != nil {
 		msg := fmt.Sprintf("failed to connect to db: %v\n", err)
 		shutdownChan.Send(inner.ShutdownMessage, origin, msg)
 		return nil
 	}
+
+	
 
 	return &Cache{
 		connection: conn,
