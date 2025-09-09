@@ -1,0 +1,7 @@
+http_server:
+  address: "0.0.0.0:10000"
+  timeout: 30s
+  iddle_timeout: 60s
+  tls:
+    certfile: "certs/server.crt"
+    keyfile: "certs/server.key"
