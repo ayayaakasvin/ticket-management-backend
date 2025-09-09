@@ -9,14 +9,16 @@ import (
 )
 
 const (
-	configPathEnvKey = "CONFIG_PATH"
+	configPathEnvKey 	= "CONFIG_PATH"
+	postgresURLEnvKey 	= "POSTGRES_URL"
+	valkeyURLEnvKey 	= "VALKEY_URL"
 )
 
 // Config represents the configuration structure
 type Config struct {
 					HTTPServer 		`yaml:"http_server"															env-required:"true"`
-	Database   		StorageConfig 	`yaml:"database" 															env-required:"true"`
-	Valkey     		RedisConfig   	`yaml:valkey																env-required:"true"`
+	Database   		StorageConfig
+	Valkey     		RedisConfig
 }
 
 type HTTPServer struct {
@@ -54,6 +56,16 @@ func MustLoadConfig() *Config {
 	if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
 		log.Fatalf("failed to read config file: %s", err.Error())
 	}
+
+	postgresURL := os.Getenv(configPathEnvKey)
+	valkeyURL := os.Getenv(configPathEnvKey)
+
+	if postgresURL == "" || valkeyURL == "" {
+		log.Fatalf("failed to read URLs")
+	}
+
+	cfg.Database.URL = postgresURL
+	cfg.Valkey.URL = valkeyURL
 
 	return &cfg
 }
