@@ -57,8 +57,8 @@ func MustLoadConfig() *Config {
 		log.Fatalf("failed to read config file: %s", err.Error())
 	}
 
-	postgresURL := os.Getenv(configPathEnvKey)
-	valkeyURL := os.Getenv(configPathEnvKey)
+	postgresURL := os.Getenv(postgresURLEnvKey)
+	valkeyURL := os.Getenv(valkeyURLEnvKey)
 
 	if postgresURL == "" || valkeyURL == "" {
 		log.Fatalf("failed to read URLs")
