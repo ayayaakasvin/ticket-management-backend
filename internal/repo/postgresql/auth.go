@@ -28,7 +28,7 @@ func (p *PostgreSQL) RegisterUser(ctx context.Context, username, hashedPassword 
 	return nil
 }
 
-func (p *PostgreSQL) AuthentificateUser(ctx context.Context, username, password string) (int, error) {
+func (p *PostgreSQL) AuthentificateUser(ctx context.Context, username, password string) (uint, error) {
 	stmt, err := p.conn.PrepareContext(ctx, "SELECT user_id, password FROM users WHERE username = $1 LIMIT 1")
 	if err != nil {
 		return 0, err
@@ -36,7 +36,7 @@ func (p *PostgreSQL) AuthentificateUser(ctx context.Context, username, password 
 	defer stmt.Close()
 
 	var (
-		userId         int
+		userId         uint
 		hashedPassword string
 	)
 

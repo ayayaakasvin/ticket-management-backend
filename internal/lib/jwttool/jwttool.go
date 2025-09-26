@@ -41,7 +41,7 @@ func ValidateJWT(tokenString string) (jwt.MapClaims, error) {
 	return nil, fmt.Errorf("invalid token")
 }
 
-func GenerateAccessToken(userId int, sessionId string, ttl time.Duration) string {
+func GenerateAccessToken(userId uint, sessionId string, ttl time.Duration) string {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, models.JWTToken{
 		UserID:    userId,
 		SessionID: sessionId,
@@ -60,7 +60,7 @@ func GenerateAccessToken(userId int, sessionId string, ttl time.Duration) string
 	return tokenString
 }
 
-func GenerateRefreshToken(userId int, ttl time.Duration) string {
+func GenerateRefreshToken(userId uint, ttl time.Duration) string {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, models.JWTToken{
 		UserID: userId,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -78,13 +78,13 @@ func GenerateRefreshToken(userId int, ttl time.Duration) string {
 	return tokenString
 }
 
-func FetchUserID(userIdAny any) (int, error) {
+func FetchUserID(userIdAny any) (uint, error) {
 	switch v := userIdAny.(type) {
 	case float64:
-		return int(v), nil
+		return uint(v), nil
 	case int:
-		return v, nil
+		return uint(v), nil
 	default:
-		return -1, fmt.Errorf("invalid user id type")
+		return 0, fmt.Errorf("invalid user id type")
 	}
 }

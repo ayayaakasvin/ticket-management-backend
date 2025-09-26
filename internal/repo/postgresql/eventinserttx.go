@@ -9,7 +9,7 @@ import (
 )
 
 // Whole transaction function to add event. should return uuid of event or error in case of issue
-func (p *PostgreSQL) AddEventToDatabase(ctx context.Context, event *models.Event, tickets []*models.Ticket, location models.Location, tags []string) (string, error) {
+func (p *PostgreSQL) InsertEventObjectToDatabase(ctx context.Context, event *models.Event) (string, error) {
 	tx, err := p.conn.BeginTx(ctx, nil)
 	defer func() {
     	if err != nil {
@@ -31,7 +31,7 @@ func (p *PostgreSQL) AddEventToDatabase(ctx context.Context, event *models.Event
 		return "", err
 	}
 
-	for _, ticket := range tickets {
+	for _, ticket := range event.Tickets {
 		newTicketUUID := uuid.NewString()
 		ticket.TicketUUID = newTicketUUID
 		ticket.EventUUID = newEventUUID
@@ -42,18 +42,13 @@ func (p *PostgreSQL) AddEventToDatabase(ctx context.Context, event *models.Event
 		}
 	}
 
-	location.EventUUID = newEventUUID
-	err = p.InsertEventLocation(ctx, tx, location)
+	event.Location.EventUUID = newEventUUID
+	err = p.InsertEventLocation(ctx, tx, event.Location)
 	if err != nil {
 		return "", err
 	}
 
-	err = p.InsertTags(ctx, tx, newEventUUID, tags)
-	if err != nil {
-		return "", err
-	}
-
-	err = p.UpdateEventImageURL(ctx, tx, newEventUUID, event.ImageURL)
+	err = p.InsertTags(ctx, tx, newEventUUID, event.Tags)
 	if err != nil {
 		return "", err
 	}

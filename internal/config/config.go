@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
+	"github.com/joho/godotenv"
 )
 
 const (
@@ -43,6 +44,10 @@ type RedisConfig struct {
 
 // MustLoadConfig loads the configuration from the specified path
 func MustLoadConfig() *Config {
+	if err := godotenv.Load(); err != nil {
+		log.Printf("no .env file found, falling back to environment only")
+	}
+	
 	configPath := os.Getenv(configPathEnvKey)
 	if configPath == "" {
 		log.Fatalf("%s is not set up", configPathEnvKey)

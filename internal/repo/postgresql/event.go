@@ -38,7 +38,18 @@ func (p *PostgreSQL) InsertEvent(ctx context.Context, tx *sql.Tx, eventObj *mode
 func (p *PostgreSQL) GetEventByUUID(ctx context.Context, eventUUID string) (*models.Event, error) {
 	var event *models.Event = new(models.Event)
 	err := p.conn.QueryRowContext(ctx, `
-		SELECT event_uuid, creation_time, starting_time, ending_time, title, description, category_id, status, capacity, image_url, organizer_id
+		SELECT 
+			event_uuid, 
+			creation_time, 
+			starting_time, 
+			ending_time, 
+			title, 
+			description,
+			category_id, 
+			status, 
+			capacity, 
+			image_url, 
+			organizer_id
 		FROM events
 		WHERE event_uuid = $1
 	`, eventUUID).Scan(
@@ -57,15 +68,66 @@ func (p *PostgreSQL) GetEventByUUID(ctx context.Context, eventUUID string) (*mod
 	if err != nil {
 		return nil, err
 	}
+	
+	if tickets, err := p.GetEventTickets(ctx, eventUUID); err != nil {
+		return nil, err
+	} else {
+		event.Tickets = tickets
+	}
+
+	if location, err := p.GetEventLocationByEventUUID(ctx, eventUUID); err != nil {
+		return  nil, err
+	} else {
+		event.Location = *location
+	}
 
 	return event, nil
 }
 
-func (p *PostgreSQL) GetAllEvents(ctx context.Context, eventUUID string) ([]*models.Event, error) {
+// Get all events records without details such as Tickets and Location
+func (p *PostgreSQL) GetAllEvents(ctx context.Context) ([]*models.Event, error) {
+	rows, err := p.conn.QueryContext(ctx, `
+		SELECT event_uuid, creation_time, starting_time, ending_time, title, description, category_id, status, capacity, image_url, organizer_id
+		FROM events`)
+	if err != nil {
+		return nil, err
+	}
+
+	var events []*models.Event
+	for rows.Next() {
+		var event *models.Event = new(models.Event)
+		err := rows.Scan(
+			&event.EventUUID,
+			&event.CreationTime,
+			&event.StartingTime,
+			&event.EndingTime,
+			&event.Title,
+			&event.Description,
+			&event.CategoryID,
+			&event.Status,
+			&event.Capacity,
+			&event.ImageURL,
+			&event.OrganizerID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan error: %v", err)
+		}
+
+		events = append(events, event)
+	}
+
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("scan error: %v", err)
+	}
+
+	return  events, nil
+}
+
+func (p *PostgreSQL) GetEventsByCategoryID(ctx context.Context, categoryID uint) ([]*models.Event, error) {
 	rows, err := p.conn.QueryContext(ctx, `
 		SELECT event_uuid, creation_time, starting_time, ending_time, title, description, category_id, status, capacity, image_url, organizer_id
 		FROM events
-	`, eventUUID)
+		WHERE category_id = $1`, categoryID)
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +163,8 @@ func (p *PostgreSQL) GetAllEvents(ctx context.Context, eventUUID string) ([]*mod
 }
 
 // Update the image_url for a specific event
-func (p *PostgreSQL) UpdateEventImageURL(ctx context.Context, tx *sql.Tx, eventUUID string, imageURL string) error {
-	_, err := tx.ExecContext(ctx, `
+func (p *PostgreSQL) UpdateEventImageURL(ctx context.Context, eventUUID string, imageURL string) error {
+	_, err := p.conn.ExecContext(ctx, `
 		UPDATE events
 		SET image_url = $1
 		WHERE event_uuid = $2

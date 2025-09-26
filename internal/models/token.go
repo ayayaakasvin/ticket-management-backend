@@ -5,7 +5,7 @@ import (
 )
 
 type JWTToken struct {
-	UserID    int    `json:"user_id"`
+	UserID    uint    `json:"user_id"`
 	SessionID string `json:"session_id"`
 	jwt.RegisteredClaims
 }

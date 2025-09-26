@@ -12,8 +12,8 @@ import (
 // Insert Ticket model to the tickets table
 func (p *PostgreSQL) InsertTicket(ctx context.Context, tx *sql.Tx, ticketObj *models.Ticket) error {
 	_, err := tx.ExecContext(ctx, `
-		INSERT INTO tickets (ticket_uuid, event_uuid, name, price, currency, quantity, starting_time, ending_time)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO tickets (ticket_uuid, event_uuid, name, price, currency, quantity)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`,
 		ticketObj.TicketUUID,
 		ticketObj.EventUUID,
@@ -21,8 +21,6 @@ func (p *PostgreSQL) InsertTicket(ctx context.Context, tx *sql.Tx, ticketObj *mo
 		ticketObj.Price,
 		ticketObj.Currency,
 		ticketObj.Quantity,
-		ticketObj.StartingTime,
-		ticketObj.EndingTime,
 	)
 	if err != nil {
 		return err
@@ -80,7 +78,7 @@ func (p *PostgreSQL) DeleteTicket(ctx context.Context, ticketUUID string) error 
 func (p *PostgreSQL) GetTicket(ctx context.Context, ticketUUID string) (*models.Ticket, error) {
 	var ticketObj *models.Ticket = new(models.Ticket)
 	err := p.conn.QueryRowContext(ctx, `
-		SELECT ticket_uuid, event_uuid, name, price, currency, quantity, sold, starting_time, ending_time
+		SELECT ticket_uuid, event_uuid, name, price, currency, quantity, sold
 		FROM tickets
 		WHERE ticket_uuid = $1
 	`, ticketUUID).Scan(
@@ -91,8 +89,6 @@ func (p *PostgreSQL) GetTicket(ctx context.Context, ticketUUID string) (*models.
 		&ticketObj.Currency,
 		&ticketObj.Quantity,
 		&ticketObj.Sold,
-		&ticketObj.StartingTime,
-		&ticketObj.EndingTime,
 	)
 
 	if err == sql.ErrNoRows {
@@ -107,7 +103,7 @@ func (p *PostgreSQL) GetTicket(ctx context.Context, ticketUUID string) (*models.
 
 func (p *PostgreSQL) GetEventTickets(ctx context.Context, eventUUID string) ([]*models.Ticket, error) {
 	rows, err := p.conn.QueryContext(ctx, `
-		SELECT ticket_uuid, event_uuid, name, price, currency, quantity, sold, starting_time, ending_time
+		SELECT ticket_uuid, event_uuid, name, price, currency, quantity, sold
 		FROM tickets
 		WHERE event_uuid = $1
 	`, eventUUID,
@@ -121,14 +117,12 @@ func (p *PostgreSQL) GetEventTickets(ctx context.Context, eventUUID string) ([]*
 		var ticketObj *models.Ticket = new(models.Ticket)
 		err := rows.Scan(
 			&ticketObj.TicketUUID,
-		&ticketObj.EventUUID,
-		&ticketObj.Name,
-		&ticketObj.Price,
-		&ticketObj.Currency,
-		&ticketObj.Quantity,
-		&ticketObj.Sold,
-		&ticketObj.StartingTime,
-		&ticketObj.EndingTime,
+			&ticketObj.EventUUID,
+			&ticketObj.Name,
+			&ticketObj.Price,
+			&ticketObj.Currency,
+			&ticketObj.Quantity,
+			&ticketObj.Sold,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan error: %v", err)
@@ -142,4 +136,24 @@ func (p *PostgreSQL) GetEventTickets(ctx context.Context, eventUUID string) ([]*
 	}
 
 	return tickets, nil
+}
+
+// Insert Ticket model to the tickets table after main transaction
+func (p *PostgreSQL) InsertTicketAfterwards(ctx context.Context, ticketObj *models.Ticket) error {
+	_, err := p.conn.ExecContext(ctx, `
+		INSERT INTO tickets (ticket_uuid, event_uuid, name, price, currency, quantity)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`,
+		ticketObj.TicketUUID,
+		ticketObj.EventUUID,
+		ticketObj.Name,
+		ticketObj.Price,
+		ticketObj.Currency,
+		ticketObj.Quantity,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

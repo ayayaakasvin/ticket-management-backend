@@ -8,14 +8,19 @@ import (
 
 type Handlers struct {
 	userRepo 	inner.UserRepository
+	eventRepo 	inner.EventRepository
 	cache 		inner.Cache
+	lfs			inner.FS
 
 	logger 		*logrus.Logger
 }
 
-func NewHTTPHandlers(user inner.UserRepository, cache inner.Cache, logger *logrus.Logger) *Handlers {
+func NewHTTPHandlers(user inner.UserRepository, eventRepo inner.EventRepository, cache inner.Cache, logger *logrus.Logger, lfs inner.FS) *Handlers {
 	return &Handlers{
 		userRepo: user,
+		eventRepo: eventRepo,
+		cache: cache,
+		lfs: lfs,
 
 		logger: logger,
 	}

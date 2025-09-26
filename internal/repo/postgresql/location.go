@@ -3,7 +3,6 @@ package postgresql
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
 	"github.com/ayayaakasvin/oneflick-ticket/internal/models"
 )
@@ -42,32 +41,20 @@ func (p *PostgreSQL) GetEventLocation(ctx context.Context, locationID uint) (*mo
 	return location, nil
 }
 
-func (p *PostgreSQL) GetEventLocationByEventUUID(ctx context.Context, eventUUID string) ([]*models.Location, error) {
-	rows, err := p.conn.QueryContext(ctx, `
-		SELECT location_id, event_uuid, name, address, latitude, longitude
+func (p *PostgreSQL) GetEventLocationByEventUUID(ctx context.Context, eventUUID string) (*models.Location, error) {
+	var location *models.Location = new(models.Location)
+	err := p.conn.QueryRowContext(ctx, `
+		SELECT location_id, name, address, latitude, longitude
 		FROM locations
 		WHERE event_uuid = $1
-	`, eventUUID)
+	`, eventUUID).Scan(&location.LocationID, &location.Name, &location.Address, &location.Latitude, &location.Longitude)
 	if err != nil {
 		return nil, err
 	}
 
-	var locationsOfEvent []*models.Location
-	for rows.Next() {
-		var location *models.Location = new(models.Location)
-		err := rows.Scan(&location.LocationID, &location.EventUUID, &location.Name, &location.Address, &location.Latitude, &location.Longitude)
-		if err != nil {
-			return nil, fmt.Errorf("scan error: %v", err)
-		}
+	location.EventUUID = eventUUID
 
-		locationsOfEvent = append(locationsOfEvent, location)
-	}
-	
-	if rows.Err() != nil {
-		return nil, fmt.Errorf("scan error: %v", err)
-	}
-	
-	return locationsOfEvent, nil
+	return location, nil
 }
 
 func (p *PostgreSQL) UpdateEventLocation(ctx context.Context, eventUUID string, location models.Location) error {

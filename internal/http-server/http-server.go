@@ -19,22 +19,36 @@ type ServerApp struct {
 
 	lmux 		*lightmux.LightMux
 
-	authRepo 	inner.UserRepository
-	cache 		inner.Cache
+	authRepo  	inner.UserRepository
+	eventRepo 	inner.EventRepository
+	cache     	inner.Cache
+	lfs       	inner.FS
+	rlm 		*inner.RateLimiter
 
-	cfg      	*config.HTTPServer
-	wg       	*sync.WaitGroup
+	cfg 		*config.HTTPServer
+	wg  		*sync.WaitGroup
 
 	logger 		*logrus.Logger
 }
 
-func NewServerApp(cfg *config.HTTPServer, logger *logrus.Logger, wg *sync.WaitGroup, authRepo inner.UserRepository, cache inner.Cache) *ServerApp {
+func NewServerApp(	cfg *config.HTTPServer, 
+					logger *logrus.Logger, 
+					wg *sync.WaitGroup, 
+					authRepo inner.UserRepository, 
+					eventRepo inner.EventRepository, 
+					cache inner.Cache, 
+					lfs inner.FS,
+					rlm *inner.RateLimiter,
+					) *ServerApp {
 	return &ServerApp{
-		cfg:      	cfg,
-		logger:   	logger,
-		wg:       	wg,
-		authRepo: 	authRepo,
-		cache: 		cache,
+		cfg:       cfg,
+		logger:    logger,
+		wg:        wg,
+		authRepo:  authRepo,
+		eventRepo: eventRepo,
+		cache:     cache,
+		lfs:       lfs,
+		rlm: 		rlm,
 	}
 }
 
@@ -87,8 +101,8 @@ func (s *ServerApp) setupServer() {
 func (s *ServerApp) setupLightMux() {
 	s.lmux = lightmux.NewLightMux(s.server)
 
-	mws := middlewares.NewHTTPMiddlewares(s.logger, s.cache)
-	handlers := handlers.NewHTTPHandlers(s.authRepo, s.cache, s.logger)
+	mws := middlewares.NewHTTPMiddlewares(s.logger, s.cache, s.rlm)
+	handlers := handlers.NewHTTPHandlers(s.authRepo, s.eventRepo, s.cache, s.logger, s.lfs)
 
 	s.lmux.Use(mws.RecoverMiddleware)
 	s.lmux.Use(mws.LoggerMiddleware)
@@ -99,11 +113,39 @@ func (s *ServerApp) setupLightMux() {
 	})
 	// s.lmux.NewRoute("/panic").Handle(http.MethodGet, handlers.PanicHandler())
 
-	authGroup := s.lmux.NewGroup("/api")
+	apiGroup := s.lmux.NewGroup("/api")
+
+	authGroup := apiGroup.ContinueGroup("")
 	authGroup.NewRoute("/login").Handle(http.MethodPost, handlers.LogIn())
 	authGroup.NewRoute("/register").Handle(http.MethodPost, handlers.Register())
 	authGroup.NewRoute("/logout", mws.JWTAuthMiddleware).Handle(http.MethodDelete, handlers.LogOut())
 	authGroup.NewRoute("/refresh").Handle(http.MethodPost, handlers.RefreshTheToken())
+
+	// Event group with JWT middleware
+	eventGroup := apiGroup.ContinueGroup("/event", mws.JWTAuthMiddleware)
+	eventGroup.NewRoute("/all").Handle(http.MethodGet, handlers.GetAllEvents()) // all events
+	eventGroup.NewRoute("/category").Handle(http.MethodGet, handlers.GetEventsByCategoryID()) // events by category_id
+	// get top 10
+	
+	// event CRUD
+	eventRoute := eventGroup.NewRoute("")
+	eventRoute.Handle(http.MethodPost, handlers.SaveEvent()) // save
+	eventGroup.NewRoute("/update/upload").Handle(http.MethodPost, handlers.UpdateEventImageURLByUploading()) // image upload
+	eventGroup.NewRoute("/update/image").Handle(http.MethodPost, handlers.UpdateEventImageURLUsingExternalSource()) // external image link
+	eventRoute.Handle(http.MethodGet, handlers.GetEventByUUID()) // event by event_uuid
+	eventRoute.Handle(http.MethodDelete, handlers.DeleteEventByUUID()) // delete by event_uuid
+
+	// Category Route GET method
+	apiGroup.ContinueGroup("/category", mws.JWTAuthMiddleware).NewRoute("").Handle(http.MethodGet, handlers.GetAllCategories()) // all category ids and names
+	apiGroup.ContinueGroup("/images/", mws.JWTAuthMiddleware).NewRoute("").Handle(http.MethodGet, handlers.ServeImages()) // images saved in main server, served by custom FS
+
+	// Ticket CRUD
+	ticketGroup := apiGroup.ContinueGroup("/ticket")
+	ticketRoute := ticketGroup.NewRoute("")
+	ticketRoute.Handle(http.MethodGet, handlers.GetTicket())
+	ticketRoute.Handle(http.MethodPost, handlers.InsertTicketAfterwards())
+	ticketRoute.Handle(http.MethodDelete, handlers.DeleteTicket())
+
 
 	s.logger.Info("LightMux has been set up")
 }

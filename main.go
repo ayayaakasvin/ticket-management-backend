@@ -8,6 +8,7 @@ import (
 	httpserver "github.com/ayayaakasvin/oneflick-ticket/internal/http-server"
 	"github.com/ayayaakasvin/oneflick-ticket/internal/logger"
 	"github.com/ayayaakasvin/oneflick-ticket/internal/models/inner"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/repo/fs"
 	"github.com/ayayaakasvin/oneflick-ticket/internal/repo/postgresql"
 	"github.com/ayayaakasvin/oneflick-ticket/internal/repo/valkey"
 )
@@ -28,10 +29,14 @@ func main() {
 	cache := valkey.NewValkeyClient(cfg.Valkey, shutdownChan)
 	logger.Info("Valkey conn has been established")
 
+	lfs := fs.NewFS(shutdownChan, ".")
+
+	rlm := inner.NewRateLimiter()
+
 	wg := new(sync.WaitGroup)
 	wg.Add(1) // to wait for server
 
-	app := httpserver.NewServerApp(&cfg.HTTPServer, logger, wg, repo, cache)
+	app := httpserver.NewServerApp(&cfg.HTTPServer, logger, wg, repo, repo, cache, lfs, rlm)
 
 	app.Run()
 }
