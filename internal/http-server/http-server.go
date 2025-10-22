@@ -15,31 +15,31 @@ import (
 )
 
 type ServerApp struct {
-	server 		*http.Server
+	server *http.Server
 
-	lmux 		*lightmux.LightMux
+	lmux *lightmux.LightMux
 
-	authRepo  	inner.UserRepository
-	eventRepo 	inner.EventRepository
-	cache     	inner.Cache
-	lfs       	inner.FS
-	rlm 		*inner.RateLimiter
+	authRepo  inner.UserRepository
+	eventRepo inner.EventRepository
+	cache     inner.Cache
+	lfs       inner.FS
+	rlm       *inner.RateLimiter
 
-	cfg 		*config.HTTPServer
-	wg  		*sync.WaitGroup
+	cfg *config.HTTPServer
+	wg  *sync.WaitGroup
 
-	logger 		*logrus.Logger
+	logger *logrus.Logger
 }
 
-func NewServerApp(	cfg *config.HTTPServer, 
-					logger *logrus.Logger, 
-					wg *sync.WaitGroup, 
-					authRepo inner.UserRepository, 
-					eventRepo inner.EventRepository, 
-					cache inner.Cache, 
-					lfs inner.FS,
-					rlm *inner.RateLimiter,
-					) *ServerApp {
+func NewServerApp(cfg *config.HTTPServer,
+	logger *logrus.Logger,
+	wg *sync.WaitGroup,
+	authRepo inner.UserRepository,
+	eventRepo inner.EventRepository,
+	cache inner.Cache,
+	lfs inner.FS,
+	rlm *inner.RateLimiter,
+) *ServerApp {
 	return &ServerApp{
 		cfg:       cfg,
 		logger:    logger,
@@ -48,7 +48,7 @@ func NewServerApp(	cfg *config.HTTPServer,
 		eventRepo: eventRepo,
 		cache:     cache,
 		lfs:       lfs,
-		rlm: 		rlm,
+		rlm:       rlm,
 	}
 }
 
@@ -111,6 +111,7 @@ func (s *ServerApp) setupLightMux() {
 		w.WriteHeader(200)
 		w.Write([]byte("pong"))
 	})
+	s.lmux.Mux().HandleFunc("/", handlers.NotFound())
 	// s.lmux.NewRoute("/panic").Handle(http.MethodGet, handlers.PanicHandler())
 
 	apiGroup := s.lmux.NewGroup("/api")
@@ -123,21 +124,22 @@ func (s *ServerApp) setupLightMux() {
 
 	// Event group with JWT middleware
 	eventGroup := apiGroup.ContinueGroup("/event", mws.JWTAuthMiddleware)
-	eventGroup.NewRoute("/all").Handle(http.MethodGet, handlers.GetAllEvents()) // all events
+	eventGroup.NewRoute("/all").Handle(http.MethodGet, handlers.GetAllEvents())               // all events
 	eventGroup.NewRoute("/category").Handle(http.MethodGet, handlers.GetEventsByCategoryID()) // events by category_id
 	// get top 10
-	
+	eventGroup.NewRoute("/top-ten").Handle(http.MethodGet, handlers.GetTop10Events())
+
 	// event CRUD
 	eventRoute := eventGroup.NewRoute("")
-	eventRoute.Handle(http.MethodPost, handlers.SaveEvent()) // save
-	eventGroup.NewRoute("/update/upload").Handle(http.MethodPost, handlers.UpdateEventImageURLByUploading()) // image upload
+	eventRoute.Handle(http.MethodPost, handlers.SaveEvent())                                                        // save
+	eventGroup.NewRoute("/update/upload").Handle(http.MethodPost, handlers.UpdateEventImageURLByUploading())        // image upload
 	eventGroup.NewRoute("/update/image").Handle(http.MethodPost, handlers.UpdateEventImageURLUsingExternalSource()) // external image link
-	eventRoute.Handle(http.MethodGet, handlers.GetEventByUUID()) // event by event_uuid
-	eventRoute.Handle(http.MethodDelete, handlers.DeleteEventByUUID()) // delete by event_uuid
+	eventRoute.Handle(http.MethodGet, handlers.GetEventByUUID())                                                    // event by event_uuid
+	eventRoute.Handle(http.MethodDelete, handlers.DeleteEventByUUID())                                              // delete by event_uuid
 
 	// Category Route GET method
 	apiGroup.ContinueGroup("/category", mws.JWTAuthMiddleware).NewRoute("").Handle(http.MethodGet, handlers.GetAllCategories()) // all category ids and names
-	apiGroup.ContinueGroup("/images/", mws.JWTAuthMiddleware).NewRoute("").Handle(http.MethodGet, handlers.ServeImages()) // images saved in main server, served by custom FS
+	apiGroup.ContinueGroup("/images/", mws.JWTAuthMiddleware).NewRoute("").Handle(http.MethodGet, handlers.ServeImages())       // images saved in main server, served by custom FS
 
 	// Ticket CRUD
 	ticketGroup := apiGroup.ContinueGroup("/ticket")
@@ -145,7 +147,6 @@ func (s *ServerApp) setupLightMux() {
 	ticketRoute.Handle(http.MethodGet, handlers.GetTicket())
 	ticketRoute.Handle(http.MethodPost, handlers.InsertTicketAfterwards())
 	ticketRoute.Handle(http.MethodDelete, handlers.DeleteTicket())
-
 
 	s.logger.Info("LightMux has been set up")
 }

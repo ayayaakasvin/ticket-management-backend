@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -16,13 +17,14 @@ import (
 
 const maxSizeForFile = 10 << 20 // max image size
 const (
-	PNG  = "image/png"
-	JPEG = "image/jpeg"
-	WEBP = "image/webp"
+	PNG         = "image/png"
+	JPEG        = "image/jpeg"
+	WEBP        = "image/webp"
+	trendingKey = "trending"
 )
 
 var validImageMimeTypes map[string]string = map[string]string{
-	PNG: ".png",
+	PNG:  ".png",
 	JPEG: ".jpeg",
 	WEBP: ".webp",
 }
@@ -122,6 +124,29 @@ func (h *Handlers) GetEventsByCategoryID() http.HandlerFunc {
 	}
 }
 
+func (h *Handlers) GetTop10Events() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := response.NewData()
+
+		var marshalled string
+		if marshalledAny, err := h.cache.Get(r.Context(), trendingKey); err != nil {
+			response.SendErrorJson(w, http.StatusInternalServerError, "failed to get list")
+			return
+		} else {
+			marshalled = marshalledAny.(string)
+		}
+
+		if trending, err := unmarshalFromValkey([]byte(marshalled)); err != nil {
+			response.SendErrorJson(w, http.StatusInternalServerError, "unmarshal error")
+			return
+		} else {
+			data["trending"] = trending
+		}
+
+		response.SendSuccessJson(w, http.StatusOK, data)
+	}
+}
+
 func (h *Handlers) UpdateEventImageURLUsingExternalSource() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := r.Context().Value(ctx.CtxUserIDKey).(uint)
@@ -185,7 +210,7 @@ func (h *Handlers) UpdateEventImageURLByUploading() http.HandlerFunc {
 		}
 
 		if err := h.eventRepo.UpdateEventImageURL(r.Context(), eventUUID, imageURL); err != nil {
-		  
+
 		}
 
 		response.SendSuccessJson(w, http.StatusOK, nil)
@@ -260,4 +285,14 @@ func getMimeType(file multipart.File) (string, error) {
 func checkForValidImageType(mimeType string) bool {
 	_, ok := validImageMimeTypes[mimeType]
 	return ok
+}
+
+func unmarshalFromValkey(marshalled []byte) ([]models.Event, error) {
+	var trending []models.Event
+
+	if err := json.Unmarshal(marshalled, &trending); err != nil {
+		return nil, err
+	}
+
+	return trending, nil
 }

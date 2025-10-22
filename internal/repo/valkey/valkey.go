@@ -42,8 +42,6 @@ func NewValkeyClient(cfg config.RedisConfig, shutdownChan inner.ShutdownChannel)
 		return nil
 	}
 
-	
-
 	return &Cache{
 		connection: conn,
 	}
