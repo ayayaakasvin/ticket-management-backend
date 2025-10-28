@@ -13,6 +13,7 @@ FROM alpine:latest
 WORKDIR /app
 
 COPY --from=builder /app/config ./config
+COPY --from=builder /app/docs .
 COPY --from=builder /app/built-binary .
 
 RUN chmod +x ./built-binary
