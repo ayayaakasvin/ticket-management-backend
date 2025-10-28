@@ -5,3 +5,8 @@ http_server:
   tls:
     certfile: "certs/server.crt"
     keyfile: "certs/server.key"
+
+smtp:
+  username: "kozhamseitov06@gmail.com"
+  host: "smtp.gmail.com"
+  port: 587

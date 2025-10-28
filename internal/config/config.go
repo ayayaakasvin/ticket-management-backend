@@ -13,6 +13,7 @@ const (
 	configPathEnvKey 	= "CONFIG_PATH"
 	postgresURLEnvKey 	= "POSTGRES_URL"
 	valkeyURLEnvKey 	= "VALKEY_URL"
+	smtpPasswordKey 	= "SMTP_PASSWORD"
 )
 
 // Config represents the configuration structure
@@ -20,10 +21,11 @@ type Config struct {
 					HTTPServer 		`yaml:"http_server"															env-required:"true"`
 	Database   		StorageConfig
 	Valkey     		RedisConfig
+	SMTP			SMTPConfig		`yaml:"smtp"																env-required:"true"`
 }
 
 type HTTPServer struct {
-	Address     	string        	`yaml:"address"			env-default:"localhost:8080`
+	Address     	string        	`yaml:"address"					env-default:"localhost:8080`
 	Timeout     	time.Duration 	`yaml:"timeout" 															env-required:"true"`
 	IdleTimeout 	time.Duration 	`yaml:"iddle_timeout" 														env-required:"true"`
 	TLS         	TLSConfig     	`yaml:"tls"																	env-required:"true"`
@@ -40,6 +42,13 @@ type TLSConfig struct {
 
 type RedisConfig struct {
 	URL				string			`yaml:"url"																	env-required:"true"`
+}
+
+type SMTPConfig struct {
+	Username 		string			`yaml:"username"															env-required:"true"`
+	Password		string
+	Host			string			`yaml:"host"																env-required:"true"`
+	Port			int				`yaml:"port"																env-required:"true"`
 }
 
 // MustLoadConfig loads the configuration from the specified path
@@ -64,6 +73,7 @@ func MustLoadConfig() *Config {
 
 	postgresURL := os.Getenv(postgresURLEnvKey)
 	valkeyURL := os.Getenv(valkeyURLEnvKey)
+	smtpPassword := os.Getenv(smtpPasswordKey)
 
 	if postgresURL == "" || valkeyURL == "" {
 		log.Fatalf("failed to read URLs")
@@ -71,6 +81,7 @@ func MustLoadConfig() *Config {
 
 	cfg.Database.URL = postgresURL
 	cfg.Valkey.URL = valkeyURL
+	cfg.SMTP.Password = smtpPassword
 
 	return &cfg
 }

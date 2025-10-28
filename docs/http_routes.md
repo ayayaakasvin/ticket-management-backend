@@ -21,10 +21,16 @@ Note: handler request/response shapes were inferred from handler code and the `m
   - Request JSON: {"username": "string", "password": "string"}
   - Response JSON (200): {"data": {"access-token": "string", "refresh-token": "string"}}
 
-- POST /api/register
-  - Handler: `handlers.Register()`
+- POST /api/register/start
+  - Handler: `handlers.RegisterStart()`
   - Auth: none
-  - Request JSON: {"username": "string", "password": "string"}
+  - Request JSON: {"username": "string", "password": "string", "email": "string"}
+  - Response: 202 Accepted, no body (or empty data)
+  
+- POST /api/register/verify
+  - Handler: `handlers.RegisterVerify()`
+  - Auth: none
+  - Request JSON: {"code": "int"}
   - Response: 201 Created, no body (or empty data)
 
 - DELETE /api/logout

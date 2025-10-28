@@ -1,11 +1,13 @@
 package validinput
 
 import (
+	"net/mail"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/ayayaakasvin/oneflick-ticket/internal/models"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/models/request"
 )
 
 type ValidationError string
@@ -115,4 +117,21 @@ func ValidateTicket(tickets []*models.Ticket) error {
 		}
 	}
 	return nil
+}
+
+func ValidateUserRequest(req *request.UserRequest) bool {
+	if (req.Email == "" && req.Username == "") || req.Password == "" {
+		return false
+	}
+
+	_, err := mail.ParseAddress(req.Email)
+	if err != nil {
+		return false
+	}
+
+	if !(IsValidPassword(req.Password) && IsValidUsername(req.Username)) {
+		return false
+	}
+
+	return true
 }

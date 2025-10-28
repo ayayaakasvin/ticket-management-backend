@@ -8,20 +8,21 @@ import (
 	"github.com/ayayaakasvin/oneflick-ticket/internal/lib/bcrypthashing"
 )
 
-func (p *PostgreSQL) RegisterUser(ctx context.Context, username, hashedPassword string) error {
-	if exists, err := p.UsernameExists(username); err != nil {
+func (p *PostgreSQL) RegisterUser(ctx context.Context, username, hashedPassword, email string) error {
+	if exists, err := p.UsernameExists(ctx, username); err != nil {
 		return err
 	} else if exists {
 		return errors.New("user already exists")
 	}
 
-	stmt, err := p.conn.PrepareContext(ctx, "INSERT INTO users (username, password) VALUES ($1, $2)")
-	if err != nil {
+	if exists, err := p.EmailExists(ctx, username); err != nil {
 		return err
+	} else if exists {
+		return errors.New("email already in use")
 	}
-	defer stmt.Close()
 
-	if _, err = stmt.ExecContext(ctx, username, hashedPassword); err != nil {
+	_, err := p.conn.ExecContext(ctx, "INSERT INTO users (username, password) VALUES ($1, $2)",username, hashedPassword)
+	if err != nil {
 		return err
 	}
 
@@ -29,18 +30,13 @@ func (p *PostgreSQL) RegisterUser(ctx context.Context, username, hashedPassword 
 }
 
 func (p *PostgreSQL) AuthentificateUser(ctx context.Context, username, password string) (uint, error) {
-	stmt, err := p.conn.PrepareContext(ctx, "SELECT user_id, password FROM users WHERE username = $1 LIMIT 1")
-	if err != nil {
-		return 0, err
-	}
-	defer stmt.Close()
-
 	var (
 		userId         uint
 		hashedPassword string
 	)
-
-	if err = stmt.QueryRowContext(ctx, username).Scan(&userId, &hashedPassword); err != nil {
+	
+	if err := p.conn.QueryRowContext(ctx, "SELECT user_id, password FROM users WHERE username = $1", username).Scan(&userId, &hashedPassword); 
+		err != nil {
 		if err == sql.ErrNoRows {
 			return 0, errors.New(NotFound)
 		}
@@ -54,20 +50,16 @@ func (p *PostgreSQL) AuthentificateUser(ctx context.Context, username, password 
 	return userId, nil
 }
 
-func (p *PostgreSQL) UsernameExists(name string) (bool, error) {
-	stmt, err := p.conn.Prepare("SELECT username FROM users WHERE username = $1")
-	if err != nil {
-		return false, err
-	}
-	defer stmt.Close()
+func (p *PostgreSQL) UsernameExists(ctx context.Context, name string) (bool, error) {
+	var exists bool
+	err := p.conn.QueryRowContext(ctx,"SELECT EXISTS (SELECT 1 FROM users WHERE username = $1)", name).Scan(&exists)
 
-	var username string
-	err = stmt.QueryRow(name).Scan(&username)
-	if err == sql.ErrNoRows {
-		return false, nil
-	} else if err != nil {
-		return false, err
-	}
+	return exists, err
+}
 
-	return true, nil
+func (p *PostgreSQL) EmailExists(ctx context.Context, email string) (bool, error) {
+	var exists bool
+	err := p.conn.QueryRowContext(ctx,"SELECT EXISTS (SELECT 1 FROM users WHERE email = $1)", email).Scan(&exists)
+
+	return exists, err
 }

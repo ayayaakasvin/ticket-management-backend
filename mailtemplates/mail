@@ -1,0 +1,22 @@
+Subject: %s
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="boundary42"
+
+--boundary42
+Content-Type: text/plain; charset="UTF-8"
+
+Your verification code: %s
+It expires in 10 minutes.
+
+--boundary42
+Content-Type: text/html; charset="UTF-8"
+
+<!DOCTYPE html>
+<html>
+  <body>
+    <p>Your verification code: <strong>%s</strong></p>
+    <p>It expires in 10 minutes.</p>
+  </body>
+</html>
+
+--boundary42--

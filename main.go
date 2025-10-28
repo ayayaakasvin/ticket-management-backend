@@ -5,6 +5,8 @@ import (
 	"sync"
 
 	"github.com/ayayaakasvin/oneflick-ticket/internal/config"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/smtptool"
+
 	httpserver "github.com/ayayaakasvin/oneflick-ticket/internal/http-server"
 	"github.com/ayayaakasvin/oneflick-ticket/internal/logger"
 	"github.com/ayayaakasvin/oneflick-ticket/internal/models/inner"
@@ -16,6 +18,8 @@ import (
 func main() {
 	cfg := config.MustLoadConfig()
 	logger := logger.SetupLogger()
+
+	logger.Infof("cfg: %v", cfg)
 
 	shutdownChan := inner.NewShutdownChannel()
 	go func() {
@@ -29,6 +33,9 @@ func main() {
 	cache := valkey.NewValkeyClient(cfg.Valkey, shutdownChan)
 	logger.Info("Valkey conn has been established")
 
+	s := smtptool.NewSMTPToolWithPreHealthCheck(&cfg.SMTP, shutdownChan)
+	logger.Info("SMTP established")
+
 	lfs := fs.NewFS(shutdownChan, ".")
 
 	rlm := inner.NewRateLimiter()
@@ -36,7 +43,7 @@ func main() {
 	wg := new(sync.WaitGroup)
 	wg.Add(1) // to wait for server
 
-	app := httpserver.NewServerApp(&cfg.HTTPServer, logger, wg, repo, repo, cache, lfs, rlm)
+	app := httpserver.NewServerApp(&cfg.HTTPServer, logger, wg, repo, repo, cache, lfs, rlm, s)
 
 	app.Run()
 }

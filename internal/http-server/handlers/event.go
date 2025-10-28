@@ -17,10 +17,11 @@ import (
 
 const maxSizeForFile = 10 << 20 // max image size
 const (
-	PNG         = "image/png"
-	JPEG        = "image/jpeg"
-	WEBP        = "image/webp"
-	trendingKey = "trending"
+	PNG         			= "image/png"
+	JPEG        			= "image/jpeg"
+	WEBP        			= "image/webp"
+	trendingUpdateTimeKey 	= "trending_update_time"
+	trendingKey 			= "trending_events"
 )
 
 var validImageMimeTypes map[string]string = map[string]string{
@@ -128,19 +129,37 @@ func (h *Handlers) GetTop10Events() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := response.NewData()
 
-		var marshalled string
+		var marshalled []byte
 		if marshalledAny, err := h.cache.Get(r.Context(), trendingKey); err != nil {
 			response.SendErrorJson(w, http.StatusInternalServerError, "failed to get list")
 			return
 		} else {
-			marshalled = marshalledAny.(string)
+			switch v := marshalledAny.(type) {
+				case []byte: {
+					marshalled = v
+				}
+				case string: {
+					marshalled = []byte(v)
+				}
+			}
+		}
+
+		if updatedAtAny, err := h.cache.Get(r.Context(), trendingUpdateTimeKey); err != nil {
+			response.SendErrorJson(w, http.StatusInternalServerError, "failed to get update time")
+			return
+		} else {
+			if updatedAt, ok := updatedAtAny.(string); ok {
+				data["updated_at"] = updatedAt
+			} else {
+				data["updated_at"] = "unknown"
+			}
 		}
 
 		if trending, err := unmarshalFromValkey([]byte(marshalled)); err != nil {
 			response.SendErrorJson(w, http.StatusInternalServerError, "unmarshal error")
 			return
 		} else {
-			data["trending"] = trending
+			data["trending_events"] = trending
 		}
 
 		response.SendSuccessJson(w, http.StatusOK, data)
@@ -287,8 +306,8 @@ func checkForValidImageType(mimeType string) bool {
 	return ok
 }
 
-func unmarshalFromValkey(marshalled []byte) ([]models.Event, error) {
-	var trending []models.Event
+func unmarshalFromValkey(marshalled []byte) ([]models.EventStats, error) {
+	var trending []models.EventStats
 
 	if err := json.Unmarshal(marshalled, &trending); err != nil {
 		return nil, err

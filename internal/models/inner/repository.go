@@ -8,7 +8,7 @@ import (
 )
 
 type UserRepository interface {
-	RegisterUser(ctx context.Context, username, hashedpassword string) error
+	RegisterUser(ctx context.Context, username, hashedpassword, email string) error
 	AuthentificateUser(ctx context.Context, username, password string) (uint, error)
 }
 
