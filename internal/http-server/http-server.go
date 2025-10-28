@@ -113,7 +113,6 @@ func (s *ServerApp) setupLightMux() {
 		w.WriteHeader(200)
 		w.Write([]byte("pong"))
 	})
-	s.lmux.Mux().HandleFunc("/", handlers.NotFound())
 	// s.lmux.NewRoute("/panic").Handle(http.MethodGet, handlers.PanicHandler())
 
 	apiGroup := s.lmux.NewGroup("/api")
@@ -150,6 +149,8 @@ func (s *ServerApp) setupLightMux() {
 	ticketRoute.Handle(http.MethodGet, handlers.GetTicket())
 	ticketRoute.Handle(http.MethodPost, handlers.InsertTicketAfterwards())
 	ticketRoute.Handle(http.MethodDelete, handlers.DeleteTicket())
+
+	s.lmux.Mux().HandleFunc("/", handlers.NotFound())
 
 	s.logger.Info("LightMux has been set up")
 }
