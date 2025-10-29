@@ -24,7 +24,7 @@ type ServerApp struct {
 	cache     	inner.Cache
 	lfs       	inner.FS
 	rlm       	*inner.RateLimiter
-	smtp 		inner.SMTP
+	// smtp 		inner.SMTP
 
 	cfg 		*config.HTTPServer
 	wg  		*sync.WaitGroup
@@ -40,7 +40,7 @@ func NewServerApp(cfg *config.HTTPServer,
 	cache inner.Cache,
 	lfs inner.FS,
 	rlm *inner.RateLimiter,
-	smtp inner.SMTP,
+	// smtp inner.SMTP,
 ) *ServerApp {
 	return &ServerApp{
 		cfg:       cfg,
@@ -104,7 +104,7 @@ func (s *ServerApp) setupLightMux() {
 	s.lmux = lightmux.NewLightMux(s.server)
 
 	mws := middlewares.NewHTTPMiddlewares(s.logger, s.cache, s.rlm)
-	handlers := handlers.NewHTTPHandlers(s.authRepo, s.eventRepo, s.cache, s.logger, s.lfs, s.smtp)
+	handlers := handlers.NewHTTPHandlers(s.authRepo, s.eventRepo, s.cache, s.logger, s.lfs)
 
 	s.lmux.Use(mws.RecoverMiddleware)
 	s.lmux.Use(mws.LoggerMiddleware)
@@ -119,8 +119,9 @@ func (s *ServerApp) setupLightMux() {
 
 	authGroup := apiGroup.ContinueGroup("")
 	authGroup.NewRoute("/login").Handle(http.MethodPost, handlers.LogIn())
-	authGroup.NewRoute("/register/start").Handle(http.MethodPost, handlers.RegisterStart())
-	authGroup.NewRoute("/register/verify").Handle(http.MethodPost, handlers.RegisterVerify())
+	authGroup.NewRoute("/register").Handle(http.MethodPost, handlers.Register())
+	// authGroup.NewRoute("/register/start").Handle(http.MethodPost, handlers.RegisterStart())
+	// authGroup.NewRoute("/register/verify").Handle(http.MethodPost, handlers.RegisterVerify())
 	authGroup.NewRoute("/logout", mws.JWTAuthMiddleware).Handle(http.MethodDelete, handlers.LogOut())
 	authGroup.NewRoute("/refresh").Handle(http.MethodPost, handlers.RefreshTheToken())
 

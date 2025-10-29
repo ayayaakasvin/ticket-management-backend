@@ -3,7 +3,6 @@ package handlers
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -66,37 +65,7 @@ func (h *Handlers) LogIn() http.HandlerFunc {
 	}
 }
 
-// func (h *Handlers) Register() http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		var registerReq request.UserRequest
-// 		if err := bindjson.BindJson(r.Body, &registerReq); err != nil {
-// 			response.SendErrorJson(w, http.StatusBadRequest, "failed to bind request")
-// 			return
-// 		}
-
-// 		if !(validinput.IsValidPassword(registerReq.Password) && validinput.IsValidUsername(registerReq.Username)) {
-// 			response.SendErrorJson(w, http.StatusBadRequest, "invalid credentials for register")
-// 			return
-// 		}
-
-// 		hashed, err := bcrypthashing.BcryptHashing(registerReq.Password)
-// 		if err != nil {
-// 			h.logger.WithError(err).Error("bcrypt hashing failed")
-// 			response.SendErrorJson(w, http.StatusInternalServerError, "Internal Server Error")
-// 			return
-// 		}
-
-// 		if err := h.userRepo.RegisterUser(r.Context(), registerReq.Username, hashed, registerReq.Email); err != nil {
-// 			h.logger.WithError(err).Error("register user failed")
-// 			response.SendErrorJson(w, http.StatusInternalServerError, "failed to register")
-// 			return
-// 		}
-
-// 		response.SendSuccessJson(w, http.StatusCreated, nil)
-// 	}
-// }
-
-func (h *Handlers) RegisterStart() http.HandlerFunc {
+func (h *Handlers) Register() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var registerReq request.UserRequest
 		if err := bindjson.BindJson(r.Body, &registerReq); err != nil {
@@ -104,79 +73,109 @@ func (h *Handlers) RegisterStart() http.HandlerFunc {
 			return
 		}
 
-		if !validinput.ValidateUserRequest(&registerReq) {
+		if !(validinput.IsValidPassword(registerReq.Password) && validinput.IsValidUsername(registerReq.Username)) {
 			response.SendErrorJson(w, http.StatusBadRequest, "invalid credentials for register")
 			return
 		}
 
-		code := h.smtp.GenerateRandomSequence()
-		codeString := strconv.Itoa(code)
-
-		registerForm := convertFormToString(&registerReq)
-
-		if err := h.cache.Set(r.Context(), codeString, registerForm, RegisterTTL); err != nil {
-			h.logger.WithError(err).Error("failed to set user request in cache")
-			response.SendErrorJson(w, http.StatusInternalServerError, "cache error")
-			return
-		}
-
-		if err := h.smtp.SendCode("Verification code", code, []string{registerReq.Email}); err != nil {
-			h.logger.WithError(err).WithField("email", registerReq.Email).Error("failed to send verification code to email")
-			response.SendErrorJson(w, http.StatusInternalServerError, "smtp error")
-			return
-		}
-
-		response.SendSuccessJson(w, http.StatusAccepted, nil)
-	}
-}
-
-func (h *Handlers) RegisterVerify() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req request.RegisterVerify
-		if err := bindjson.BindJson(r.Body, &req); err != nil {
-			response.SendErrorJson(w, http.StatusBadRequest, "invalid request format")
-			return
-		}
-
-		// Get cached form
-		formAny, err := h.cache.Get(r.Context(), strconv.Itoa(req.Code))
+		hashed, err := bcrypthashing.BcryptHashing(registerReq.Password)
 		if err != nil {
-			h.logger.WithError(err).Warn("failed to get cached form")
-			response.SendErrorJson(w, http.StatusBadRequest, "verification failed")
+			h.logger.WithError(err).Error("bcrypt hashing failed")
+			response.SendErrorJson(w, http.StatusInternalServerError, "Internal Server Error")
 			return
 		}
 
-		formString, ok := formAny.(string)
-		if !ok || formString == "" {
-			h.logger.Warn("cached form is empty or invalid")
-			response.SendErrorJson(w, http.StatusBadRequest, "verification failed")
-			return
-		}
-
-		form, err := fetchFormFromString(formString)
-		if err != nil {
-			h.logger.WithError(err).Warn("failed to parse cached form")
-			response.SendErrorJson(w, http.StatusBadRequest, "verification failed")
-			return
-		}
-
-		hashed, err := bcrypthashing.BcryptHashing(form.Password)
-		if err != nil {
-			h.logger.WithError(err).Error("failed to hash password")
-			response.SendErrorJson(w, http.StatusInternalServerError, "internal server error")
-			return
-		}
-
-		if err := h.userRepo.RegisterUser(r.Context(), form.Username, hashed, form.Email); err != nil {
-			h.logger.WithError(err).Warn("failed to register user")
-			// Do NOT say "username already exists"
-			response.SendErrorJson(w, http.StatusBadRequest, "registration failed")
+		if err := h.userRepo.RegisterUser(r.Context(), registerReq.Username, hashed, registerReq.Email); err != nil {
+			h.logger.WithError(err).Error("register user failed")
+			response.SendErrorJson(w, http.StatusInternalServerError, "failed to register")
 			return
 		}
 
 		response.SendSuccessJson(w, http.StatusCreated, nil)
 	}
 }
+
+// func (h *Handlers) RegisterStart() http.HandlerFunc {
+// 	return func(w http.ResponseWriter, r *http.Request) {
+// 		var registerReq request.UserRequest
+// 		if err := bindjson.BindJson(r.Body, &registerReq); err != nil {
+// 			response.SendErrorJson(w, http.StatusBadRequest, "failed to bind request")
+// 			return
+// 		}
+
+// 		if !validinput.ValidateUserRequest(&registerReq) {
+// 			response.SendErrorJson(w, http.StatusBadRequest, "invalid credentials for register")
+// 			return
+// 		}
+
+// 		code := h.smtp.GenerateRandomSequence()
+// 		codeString := strconv.Itoa(code)
+
+// 		registerForm := convertFormToString(&registerReq)
+
+// 		if err := h.cache.Set(r.Context(), codeString, registerForm, RegisterTTL); err != nil {
+// 			h.logger.WithError(err).Error("failed to set user request in cache")
+// 			response.SendErrorJson(w, http.StatusInternalServerError, "cache error")
+// 			return
+// 		}
+
+// 		if err := h.smtp.SendCode("Verification code", code, []string{registerReq.Email}); err != nil {
+// 			h.logger.WithError(err).WithField("email", registerReq.Email).Error("failed to send verification code to email")
+// 			response.SendErrorJson(w, http.StatusInternalServerError, "smtp error")
+// 			return
+// 		}
+
+// 		response.SendSuccessJson(w, http.StatusAccepted, nil)
+// 	}
+// }
+
+// func (h *Handlers) RegisterVerify() http.HandlerFunc {
+// 	return func(w http.ResponseWriter, r *http.Request) {
+// 		var req request.RegisterVerify
+// 		if err := bindjson.BindJson(r.Body, &req); err != nil {
+// 			response.SendErrorJson(w, http.StatusBadRequest, "invalid request format")
+// 			return
+// 		}
+
+// 		// Get cached form
+// 		formAny, err := h.cache.Get(r.Context(), strconv.Itoa(req.Code))
+// 		if err != nil {
+// 			h.logger.WithError(err).Warn("failed to get cached form")
+// 			response.SendErrorJson(w, http.StatusBadRequest, "verification failed")
+// 			return
+// 		}
+
+// 		formString, ok := formAny.(string)
+// 		if !ok || formString == "" {
+// 			h.logger.Warn("cached form is empty or invalid")
+// 			response.SendErrorJson(w, http.StatusBadRequest, "verification failed")
+// 			return
+// 		}
+
+// 		form, err := fetchFormFromString(formString)
+// 		if err != nil {
+// 			h.logger.WithError(err).Warn("failed to parse cached form")
+// 			response.SendErrorJson(w, http.StatusBadRequest, "verification failed")
+// 			return
+// 		}
+
+// 		hashed, err := bcrypthashing.BcryptHashing(form.Password)
+// 		if err != nil {
+// 			h.logger.WithError(err).Error("failed to hash password")
+// 			response.SendErrorJson(w, http.StatusInternalServerError, "internal server error")
+// 			return
+// 		}
+
+// 		if err := h.userRepo.RegisterUser(r.Context(), form.Username, hashed, form.Email); err != nil {
+// 			h.logger.WithError(err).Warn("failed to register user")
+// 			// Do NOT say "username already exists"
+// 			response.SendErrorJson(w, http.StatusBadRequest, "registration failed")
+// 			return
+// 		}
+
+// 		response.SendSuccessJson(w, http.StatusCreated, nil)
+// 	}
+// }
 
 // TODO: Register start and verify to implement
 

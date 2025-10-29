@@ -11,18 +11,18 @@ type Handlers struct {
 	eventRepo 	inner.EventRepository
 	cache 		inner.Cache
 	lfs			inner.FS
-	smtp		inner.SMTP
+	// smtp		inner.SMTP
 
 	logger 		*logrus.Logger
 }
 
-func NewHTTPHandlers(user inner.UserRepository, eventRepo inner.EventRepository, cache inner.Cache, logger *logrus.Logger, lfs inner.FS, smtp inner.SMTP) *Handlers {
+func NewHTTPHandlers(user inner.UserRepository, eventRepo inner.EventRepository, cache inner.Cache, logger *logrus.Logger, lfs inner.FS) *Handlers {
 	return &Handlers{
 		userRepo: user,
 		eventRepo: eventRepo,
 		cache: cache,
 		lfs: lfs,
-		smtp: smtp,
+		// smtp: smtp,
 
 		logger: logger,
 	}
