@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/ayayaakasvin/oneflick-ticket/internal/models"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/domain"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -42,7 +42,7 @@ func ValidateJWT(tokenString string) (jwt.MapClaims, error) {
 }
 
 func GenerateAccessToken(userId uint, sessionId string, ttl time.Duration) string {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, models.JWTToken{
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, domain.JWTToken{
 		UserID:    userId,
 		SessionID: sessionId,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -61,7 +61,7 @@ func GenerateAccessToken(userId uint, sessionId string, ttl time.Duration) strin
 }
 
 func GenerateRefreshToken(userId uint, ttl time.Duration) string {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, models.JWTToken{
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, domain.JWTToken{
 		UserID: userId,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),

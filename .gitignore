@@ -4,3 +4,9 @@
 .env
 
 /migration
+
+/files
+
+/tmp
+
+gitleaks.json

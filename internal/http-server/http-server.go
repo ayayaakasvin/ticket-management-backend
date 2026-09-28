@@ -1,101 +1,101 @@
 package httpserver
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
-	"sync"
-	"time"
 
+	genericjwtservice "github.com/ayayaakasvin/generic-jwt-service"
 	"github.com/ayayaakasvin/oneflick-ticket/internal/config"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/domain"
 	"github.com/ayayaakasvin/oneflick-ticket/internal/http-server/handlers"
 	"github.com/ayayaakasvin/oneflick-ticket/internal/http-server/middlewares"
-	"github.com/ayayaakasvin/oneflick-ticket/internal/models/inner"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	httpSwagger "github.com/swaggo/http-swagger"
 
 	"github.com/ayayaakasvin/lightmux"
-	"github.com/sirupsen/logrus"
 )
 
 type ServerApp struct {
-	server 		*http.Server
+	server  *http.Server
+	httpcfg *config.HTTPServerConfig
+	corscfg *config.CorsConfig
+	lmux    *lightmux.LightMux
 
-	lmux 		*lightmux.LightMux
+	ar   domain.UserRepository
+	er   domain.EventRepository
+	cc   domain.Cache
+	lfs  domain.FS
+	rlm  *domain.RateLimiter
+	jwtM *genericjwtservice.JWTService
+	smtp domain.SMTP
 
-	authRepo  	inner.UserRepository
-	eventRepo 	inner.EventRepository
-	cache     	inner.Cache
-	lfs       	inner.FS
-	rlm       	*inner.RateLimiter
-	// smtp 		inner.SMTP
-
-	cfg 		*config.HTTPServer
-	wg  		*sync.WaitGroup
-
-	logger 		*logrus.Logger
+	logger *slog.Logger
 }
 
-func NewServerApp(cfg *config.HTTPServer,
-	logger *logrus.Logger,
-	wg *sync.WaitGroup,
-	authRepo inner.UserRepository,
-	eventRepo inner.EventRepository,
-	cache inner.Cache,
-	lfs inner.FS,
-	rlm *inner.RateLimiter,
-	// smtp inner.SMTP,
+func NewServerApp(
+	httpconfig *config.HTTPServerConfig,
+	corsconfig *config.CorsConfig,
+	logger *slog.Logger,
+	authRepo domain.UserRepository,
+	eventRepo domain.EventRepository,
+	cache domain.Cache,
+	lfs domain.FS,
+	rlm *domain.RateLimiter,
+	jwtM *genericjwtservice.JWTService,
+	smtp domain.SMTP,
 ) *ServerApp {
 	return &ServerApp{
-		cfg:       cfg,
-		logger:    logger,
-		wg:        wg,
-		authRepo:  authRepo,
-		eventRepo: eventRepo,
-		cache:     cache,
-		lfs:       lfs,
-		rlm:       rlm,
+		httpcfg: httpconfig,
+		corscfg: corsconfig,
+		logger:  logger,
+		ar:      authRepo,
+		er:      eventRepo,
+		cc:      cache,
+		lfs:     lfs,
+		rlm:     rlm,
+		jwtM:    jwtM,
+		smtp:    smtp,
 	}
 }
 
-func (s *ServerApp) Run() {
-	defer s.wg.Done()
-
+func (s *ServerApp) Start(ctx context.Context) error {
 	s.setupServer()
-
 	s.setupLightMux()
 
-	s.startServer()
+	return func() error {
+		s.logger.Info("Server has been started", "port", s.httpcfg.Address)
+
+		return s.lmux.Run(ctx)
+	}()
 }
 
-func (s *ServerApp) startServer() {
-	s.logger.Infof("Server has been started on port: %s", s.cfg.Address)
-	s.logger.Infof("Available handlers:\n")
+// func (s *ServerApp) StartTLS(ctx context.Context) error {
+// 	s.setupServer()
+// 	s.setupLightMux()
 
-	s.lmux.PrintMiddlewareInfo()
-	s.lmux.PrintRoutes()
+// 	return func() error {
+// 		s.logger.Info("Server has been started", "port", s.httpcfg.Address)
 
-	go func() {
-		ticker := time.NewTicker(time.Minute * 5)
-		for range ticker.C {
-			s.logger.Info("Server is running...")
-		}
-	}()
+// 		return s.lmux.RunTLS(ctx, s.tlsCfg.CertFile, s.tlsCfg.KeyFile)
+// 	}()
+// }
 
-	// RunTLS can be run when server is hosted on domain, acts as seperate service of file storing, for my project, id chose to encapsulate servers under one docker-compose and make nginx-gateaway for my api like auth, file, user service
-	// if err := s.lmux.RunTLS(s.cfg.TLS.CertFile, s.cfg.TLS.KeyFile); err != nil {
-	if err := s.lmux.Run(); err != nil {
-		s.logger.Fatalf("Server exited with error: %v", err)
-	}
+func (s *ServerApp) Stop(ctx context.Context) error {
+	return s.server.Shutdown(ctx)
 }
 
 // setuping server by pointer, so we dont have to return any value
 func (s *ServerApp) setupServer() {
 	if s.server == nil {
-		// s.logger.Warn("Server is nil, creating a new server pointer")
+		s.logger.Warn("Server is nil, creating a new server pointer")
 		s.server = &http.Server{}
 	}
 
-	s.server.Addr = s.cfg.Address
-	s.server.IdleTimeout = s.cfg.IdleTimeout
-	s.server.ReadTimeout = s.cfg.Timeout
-	s.server.WriteTimeout = s.cfg.Timeout
+	s.server.Addr = s.httpcfg.Address
+	s.server.IdleTimeout = s.httpcfg.IdleTimeout
+	s.server.ReadTimeout = s.httpcfg.Timeout
+	s.server.WriteTimeout = s.httpcfg.Timeout
 
 	s.logger.Info("Server has been set up")
 }
@@ -103,55 +103,50 @@ func (s *ServerApp) setupServer() {
 func (s *ServerApp) setupLightMux() {
 	s.lmux = lightmux.NewLightMux(s.server)
 
-	mws := middlewares.NewHTTPMiddlewares(s.logger, s.cache, s.rlm)
-	handlers := handlers.NewHTTPHandlers(s.authRepo, s.eventRepo, s.cache, s.logger, s.lfs)
+	mws := middlewares.NewHTTPMiddlewares(s.logger, s.cc, s.jwtM, s.corscfg, s.ar, s.rlm)
+	hndlrs := handlers.NewHTTPHandlers(s.ar, s.er, s.cc, s.lfs, s.smtp, s.jwtM, s.logger)
 
-	s.lmux.Use(mws.RecoverMiddleware)
-	s.lmux.Use(mws.LoggerMiddleware)
+	s.lmux.Use(mws.CaptureMiddleware, mws.RecoverMiddleware, mws.MetricsMiddleware, mws.LoggerMiddleware, mws.CORSMiddleware)
+	s.lmux.NewRoute("/metrics").Handle(http.MethodGet, promhttp.Handler().ServeHTTP) // TODO: dont forget to wrap!
+	s.lmux.NewRoute("/ping").Handle(http.MethodGet, hndlrs.PingHandler())
 
-	s.lmux.NewRoute("/ping").Handle(http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Write([]byte("pong"))
-	})
-	// s.lmux.NewRoute("/panic").Handle(http.MethodGet, handlers.PanicHandler())
+	apiRoute := s.lmux.NewGroup("/api")
 
-	apiGroup := s.lmux.NewGroup("/api")
-
-	authGroup := apiGroup.ContinueGroup("")
-	authGroup.NewRoute("/login").Handle(http.MethodPost, handlers.LogIn())
-	authGroup.NewRoute("/register").Handle(http.MethodPost, handlers.Register())
-	// authGroup.NewRoute("/register/start").Handle(http.MethodPost, handlers.RegisterStart())
-	// authGroup.NewRoute("/register/verify").Handle(http.MethodPost, handlers.RegisterVerify())
-	authGroup.NewRoute("/logout", mws.JWTAuthMiddleware).Handle(http.MethodDelete, handlers.LogOut())
-	authGroup.NewRoute("/refresh").Handle(http.MethodPost, handlers.RefreshTheToken())
+	authGroup := apiRoute.ContinueGroup("/auth")
+	authGroup.NewRoute("/register").Handle(http.MethodPost, hndlrs.Register())                    // /api/auth/register POST
+	authGroup.NewRoute("/login").Handle(http.MethodPost, hndlrs.Login())                          // /api/auth/login POST
+	authGroup.NewRoute("/logout", mws.JWTAuthMiddleware).Handle(http.MethodPost, hndlrs.Logout()) // /api/auth/logout POST
+	authGroup.NewRoute("/refresh").Handle(http.MethodPost, hndlrs.Refresh())                      // /api/auth/refresh POST
 
 	// Event group with JWT middleware
-	eventGroup := apiGroup.ContinueGroup("/event", mws.JWTAuthMiddleware)
-	eventGroup.NewRoute("/all").Handle(http.MethodGet, handlers.GetAllEvents())               // all events
-	eventGroup.NewRoute("/category").Handle(http.MethodGet, handlers.GetEventsByCategoryID()) // events by category_id
+	eventGroup := apiRoute.ContinueGroup("/event", mws.JWTAuthMiddleware)
+	eventGroup.NewRoute("/all").Handle(http.MethodGet, hndlrs.GetAllEvents())               // all events
+	eventGroup.NewRoute("/category").Handle(http.MethodGet, hndlrs.GetEventsByCategoryID()) // events by category_id
 	// get top 10
-	eventGroup.NewRoute("/top-ten").Handle(http.MethodGet, handlers.GetTop10Events())
+	eventGroup.NewRoute("/top-ten").Handle(http.MethodGet, hndlrs.GetTop10Events())
 
 	// event CRUD
 	eventRoute := eventGroup.NewRoute("")
-	eventRoute.Handle(http.MethodPost, handlers.SaveEvent())                                                        // save
-	eventGroup.NewRoute("/update/upload").Handle(http.MethodPost, handlers.UpdateEventImageURLByUploading())        // image upload
-	eventGroup.NewRoute("/update/image").Handle(http.MethodPost, handlers.UpdateEventImageURLUsingExternalSource()) // external image link
-	eventRoute.Handle(http.MethodGet, handlers.GetEventByUUID())                                                    // event by event_uuid
-	eventRoute.Handle(http.MethodDelete, handlers.DeleteEventByUUID())                                              // delete by event_uuid
+	eventRoute.Handle(http.MethodPost, hndlrs.SaveEvent())                                                        // save
+	eventGroup.NewRoute("/update/upload").Handle(http.MethodPost, hndlrs.UpdateEventImageURLByUploading())        // image upload
+	eventGroup.NewRoute("/update/image").Handle(http.MethodPost, hndlrs.UpdateEventImageURLUsingExternalSource()) // external image link
+	eventRoute.Handle(http.MethodGet, hndlrs.GetEventByUUID())                                                    // event by event_uuid
+	eventRoute.Handle(http.MethodDelete, hndlrs.DeleteEventByUUID())                                              // delete by event_uuid
 
 	// Category Route GET method
-	apiGroup.ContinueGroup("/category", mws.JWTAuthMiddleware).NewRoute("").Handle(http.MethodGet, handlers.GetAllCategories()) // all category ids and names
-	apiGroup.ContinueGroup("/images/", mws.JWTAuthMiddleware).NewRoute("").Handle(http.MethodGet, handlers.ServeImages())       // images saved in main server, served by custom FS
+	apiRoute.ContinueGroup("/category", mws.JWTAuthMiddleware).NewRoute("").Handle(http.MethodGet, hndlrs.GetAllCategories()) // all category ids and names
+	apiRoute.ContinueGroup("/images/", mws.JWTAuthMiddleware).NewRoute("").Handle(http.MethodGet, hndlrs.ServeImages())       // images saved in main server, served by custom FS
 
 	// Ticket CRUD
-	ticketGroup := apiGroup.ContinueGroup("/ticket")
+	ticketGroup := apiRoute.ContinueGroup("/ticket")
 	ticketRoute := ticketGroup.NewRoute("")
-	ticketRoute.Handle(http.MethodGet, handlers.GetTicket())
-	ticketRoute.Handle(http.MethodPost, handlers.InsertTicketAfterwards())
-	ticketRoute.Handle(http.MethodDelete, handlers.DeleteTicket())
+	ticketRoute.Handle(http.MethodGet, hndlrs.GetTicket())
+	ticketRoute.Handle(http.MethodPost, hndlrs.InsertTicketAfterwards())
+	ticketRoute.Handle(http.MethodDelete, hndlrs.DeleteTicket())
 
-	s.lmux.Mux().HandleFunc("/", handlers.NotFound())
+	s.lmux.Mux().HandleFunc("/docs/", httpSwagger.WrapHandler)
+
+	s.lmux.Mux().HandleFunc("/", hndlrs.NotFound())
 
 	s.logger.Info("LightMux has been set up")
 }

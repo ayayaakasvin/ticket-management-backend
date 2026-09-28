@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ayayaakasvin/oneflick-ticket/internal/models"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/domain"
 )
 
 // Insert Ticket model to the tickets table
-func (p *PostgreSQL) InsertTicket(ctx context.Context, tx *sql.Tx, ticketObj *models.Ticket) error {
+func (p *PostgreSQL) InsertTicket(ctx context.Context, tx *sql.Tx, ticketObj *domain.Ticket) error {
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO tickets (ticket_uuid, event_uuid, name, price, currency, quantity)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -75,8 +75,8 @@ func (p *PostgreSQL) DeleteTicket(ctx context.Context, ticketUUID string) error 
 }
 
 // Get the record of Ticket
-func (p *PostgreSQL) GetTicket(ctx context.Context, ticketUUID string) (*models.Ticket, error) {
-	var ticketObj *models.Ticket = new(models.Ticket)
+func (p *PostgreSQL) GetTicket(ctx context.Context, ticketUUID string) (*domain.Ticket, error) {
+	var ticketObj *domain.Ticket = new(domain.Ticket)
 	err := p.conn.QueryRowContext(ctx, `
 		SELECT ticket_uuid, event_uuid, name, price, currency, quantity, sold
 		FROM tickets
@@ -101,7 +101,7 @@ func (p *PostgreSQL) GetTicket(ctx context.Context, ticketUUID string) (*models.
 	return ticketObj, nil
 }
 
-func (p *PostgreSQL) GetEventTickets(ctx context.Context, eventUUID string) ([]*models.Ticket, error) {
+func (p *PostgreSQL) GetEventTickets(ctx context.Context, eventUUID string) ([]*domain.Ticket, error) {
 	rows, err := p.conn.QueryContext(ctx, `
 		SELECT ticket_uuid, event_uuid, name, price, currency, quantity, sold
 		FROM tickets
@@ -112,9 +112,9 @@ func (p *PostgreSQL) GetEventTickets(ctx context.Context, eventUUID string) ([]*
 		return nil, err
 	}
 
-	var tickets []*models.Ticket
+	var tickets []*domain.Ticket
 	for rows.Next() {
-		var ticketObj *models.Ticket = new(models.Ticket)
+		var ticketObj *domain.Ticket = new(domain.Ticket)
 		err := rows.Scan(
 			&ticketObj.TicketUUID,
 			&ticketObj.EventUUID,
@@ -139,7 +139,7 @@ func (p *PostgreSQL) GetEventTickets(ctx context.Context, eventUUID string) ([]*
 }
 
 // Insert Ticket model to the tickets table after main transaction
-func (p *PostgreSQL) InsertTicketAfterwards(ctx context.Context, ticketObj *models.Ticket) error {
+func (p *PostgreSQL) CreateTicket(ctx context.Context, ticketObj *domain.Ticket) error {
 	_, err := p.conn.ExecContext(ctx, `
 		INSERT INTO tickets (ticket_uuid, event_uuid, name, price, currency, quantity)
 		VALUES ($1, $2, $3, $4, $5, $6)

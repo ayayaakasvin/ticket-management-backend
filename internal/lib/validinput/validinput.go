@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ayayaakasvin/oneflick-ticket/internal/models"
-	"github.com/ayayaakasvin/oneflick-ticket/internal/models/request"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/domain/request"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/domain"
 )
 
 type ValidationError string
@@ -82,7 +82,7 @@ func ValidTimeOfEvent(starting, ending time.Time) bool {
 	return (starting.After(time.Now()) && starting.Before(ending))
 }
 
-func ValidateEventSave(event *models.Event) error {
+func ValidateEventSave(event *domain.Event) error {
 	if event.Title == "" {
 		return ErrorEmptyTitle
 	}
@@ -106,7 +106,7 @@ func ValidateEventSave(event *models.Event) error {
 	return nil
 }
 
-func ValidateTicket(tickets []*models.Ticket) error {
+func ValidateTicket(tickets []*domain.Ticket) error {
 	currencyISO := regexp.MustCompile(`^[A-Z]{3}$`)
 	for _, ticket := range tickets {
 		if ticket.Price < 0 {

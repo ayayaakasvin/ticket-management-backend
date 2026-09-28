@@ -4,29 +4,29 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ayayaakasvin/oneflick-ticket/internal/models"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/domain"
 	"github.com/google/uuid"
 )
 
 // Whole transaction function to add event. should return uuid of event or error in case of issue
-func (p *PostgreSQL) InsertEventObjectToDatabase(ctx context.Context, event *models.Event) (string, error) {
+func (p *PostgreSQL) CreateEvent(ctx context.Context, event *domain.Event) (string, error) {
 	tx, err := p.conn.BeginTx(ctx, nil)
 	defer func() {
-    	if err != nil {
+		if err != nil {
 			err = fmt.Errorf("event add tx error: %v", err)
 			if rbErr := tx.Rollback(); rbErr != nil {
 				fmt.Printf("tx rollback error: %v\n", rbErr)
 			}
-    	}
+		}
 	}()
-	
+
 	if err != nil {
 		return "", err
 	}
 
 	newEventUUID := uuid.NewString()
 	event.EventUUID = newEventUUID
-	_, err = p.InsertEvent(ctx, tx, event)
+	_, err = p.InsertEventTx(ctx, tx, event)
 	if err != nil {
 		return "", err
 	}

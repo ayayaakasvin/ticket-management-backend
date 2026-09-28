@@ -1,20 +1,48 @@
 http_server:
-  address: "localhost:8080"
-  timeout: 30s
-  iddle_timeout: 60s
-  tls:
-    certfile: "certs/server.crt"
-    keyfile: "certs/server.key"
+  address: "127.0.0.1:8080"
+  timeout: 10s
+  idle_timeout: 30s
 
-database:
-  host: "localhost"
-  port: "5432"
-  databaseName: "postgres"
-  user: "postgres"
-  password: ""
+lfs:
+  path: "files"
 
-valkey:
-  host: "localhost"
-  port: "6379"
-  user: "default"
-  password: ""
+cors:
+  allowed_origins: 
+    # - "http://localhost:8081"
+    # - "http://localhost:9090"
+    # - "https://192.168.8.9:8081"
+    # - "https://192.168.0.18:8081"
+    - "http://127.0.0.1:80"
+  
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "PATCH"
+    - "DELETE"
+    - "OPTIONS"
+
+  allowed_headers:
+    - "Content-Type"
+    - "Authorization"
+    - "X-Chunk-Hash"
+
+  allow_credentials: true
+
+logger:
+  env: "local"
+  service: "boxio"
+  level: -4
+  json: true
+
+sqlite:
+  db_name: "./files/sqlite/oneflick.db"
+
+jwt:
+  access_ttl: 24h
+  refresh_ttl: 168h
+
+smtp:
+  username: "kozhamseitov06@gmail.com"
+  host: "smtp.gmail.com"
+  port: 587

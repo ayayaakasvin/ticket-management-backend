@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ayayaakasvin/oneflick-ticket/internal/models"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/domain"
 )
 
-func (p *PostgreSQL) GetAllCategories(ctx context.Context) ([]models.Category, error) {
+func (p *PostgreSQL) GetCategories(ctx context.Context) ([]domain.Category, error) {
 	rows, err := p.conn.QueryContext(ctx, `
 		SELECT category_id, name
 		FROM category`)
@@ -15,9 +15,9 @@ func (p *PostgreSQL) GetAllCategories(ctx context.Context) ([]models.Category, e
 		return nil, err
 	}
 
-	var categories []models.Category
+	var categories []domain.Category
 	for rows.Next() {
-		var category models.Category
+		var category domain.Category
 		rows.Scan(&category.ID, &category.Name)
 		if err != nil {
 			return nil, fmt.Errorf("scan error: %v", err)
@@ -30,5 +30,5 @@ func (p *PostgreSQL) GetAllCategories(ctx context.Context) ([]models.Category, e
 		return nil, fmt.Errorf("scan error: %v", err)
 	}
 
-	return  categories, nil
+	return categories, nil
 }

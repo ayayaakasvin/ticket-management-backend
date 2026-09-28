@@ -4,11 +4,11 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/ayayaakasvin/oneflick-ticket/internal/models"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/domain"
 )
 
 // Insert Ticket model to the tickets table
-func (p *PostgreSQL) InsertEventLocation(ctx context.Context, tx *sql.Tx, location models.Location) error {
+func (p *PostgreSQL) InsertEventLocation(ctx context.Context, tx *sql.Tx, location domain.Location) error {
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO locations (event_uuid, name, address, latitude, longitude)
 		VALUES ($1, $2, $3, $4, $5)
@@ -26,8 +26,8 @@ func (p *PostgreSQL) InsertEventLocation(ctx context.Context, tx *sql.Tx, locati
 	return nil
 }
 
-func (p *PostgreSQL) GetEventLocation(ctx context.Context, locationID uint) (*models.Location, error) {
-	var location *models.Location = new(models.Location)
+func (p *PostgreSQL) GetEventLocation(ctx context.Context, locationID uint) (*domain.Location, error) {
+	var location *domain.Location = new(domain.Location)
 	err := p.conn.QueryRowContext(ctx, `
 		SELECT event_uuid, name, address, latitude, longitude
 		FROM locations
@@ -41,8 +41,8 @@ func (p *PostgreSQL) GetEventLocation(ctx context.Context, locationID uint) (*mo
 	return location, nil
 }
 
-func (p *PostgreSQL) GetEventLocationByEventUUID(ctx context.Context, eventUUID string) (*models.Location, error) {
-	var location *models.Location = new(models.Location)
+func (p *PostgreSQL) GetEventLocationByEventUUID(ctx context.Context, eventUUID string) (*domain.Location, error) {
+	var location *domain.Location = new(domain.Location)
 	err := p.conn.QueryRowContext(ctx, `
 		SELECT location_id, name, address, latitude, longitude
 		FROM locations
@@ -57,7 +57,7 @@ func (p *PostgreSQL) GetEventLocationByEventUUID(ctx context.Context, eventUUID 
 	return location, nil
 }
 
-func (p *PostgreSQL) UpdateEventLocation(ctx context.Context, eventUUID string, location models.Location) error {
+func (p *PostgreSQL) UpdateEventLocation(ctx context.Context, eventUUID string, location domain.Location) error {
 	_, err := p.conn.ExecContext(ctx, `
 		UPDATE locations
 		SET name = $1, address = $2, latitude = $3, longitude = $4

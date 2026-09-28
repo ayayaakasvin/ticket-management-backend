@@ -1,48 +1,81 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"os"
-	"sync"
+	"os/signal"
+	"syscall"
+	"time"
 
+	_ "github.com/ayayaakasvin/oneflick-ticket/docs"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/boostrap"
 	"github.com/ayayaakasvin/oneflick-ticket/internal/config"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/domain"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/fs"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/repo/gcache"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/repo/sqlite"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/smtptool"
 
 	httpserver "github.com/ayayaakasvin/oneflick-ticket/internal/http-server"
-	"github.com/ayayaakasvin/oneflick-ticket/internal/logger"
-	"github.com/ayayaakasvin/oneflick-ticket/internal/models/inner"
-	"github.com/ayayaakasvin/oneflick-ticket/internal/repo/fs"
-	"github.com/ayayaakasvin/oneflick-ticket/internal/repo/postgresql"
-	"github.com/ayayaakasvin/oneflick-ticket/internal/repo/valkey"
+	"github.com/ayayaakasvin/oneflick-ticket/pkg/logger"
 )
 
 func main() {
-	cfg := config.MustLoadConfig()
-	logger := logger.SetupLogger()
-
-	logger.Infof("cfg: %v", cfg)
-
-	shutdownChan := inner.NewShutdownChannel()
-	go func() {
-		logger.Errorf("Error during setup: %s, %v", shutdownChan.Value(), cfg)
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
 		os.Exit(1)
-	}()
+	}
+}
 
-	repo := postgresql.NewPostgreSQLConnection(cfg.Database, shutdownChan)
-	logger.Info("Postgresql conn has been established")
+func run() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	cache := valkey.NewValkeyClient(cfg.Valkey, shutdownChan)
-	logger.Info("Valkey conn has been established")
+	cfg := config.MustLoadConfig()
+	log := logger.SetupSlog(cfg.Logger)
 
-	// s := smtptool.NewSMTPToolWithPreHealthCheck(&cfg.SMTP, shutdownChan)
-	// logger.Info("SMTP established")
+	// smtp, err := smtptool.NewSMTPToolWithPreHealthCheck(cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.Host, cfg.SMTP.Port)
+	// if err != nil {
+	// 	return err
+	// }
 
-	lfs := fs.NewFS(shutdownChan, ".")
+	smtp, err := smtptool.NewSMTP_MockUp()
+	if err != nil {
+		return err
+	}
 
-	rlm := inner.NewRateLimiter()
+	lfs, err := fs.NewFS(cfg.LFS.BasePath)
+	if err != nil {
+		return err
+	}
 
-	wg := new(sync.WaitGroup)
-	wg.Add(1) // to wait for server
+	repo, err := sqlite.NewSqliteConnection(cfg.Database.FilePath)
+	if err != nil {
+		return err
+	}
 
-	app := httpserver.NewServerApp(&cfg.HTTPServer, logger, wg, repo, repo, cache, lfs, rlm)
+	gc := gcache.NewGCache(cfg.JWT.AccessTokenTTL)
+	
+	rlm := domain.NewRateLimiter()
 
-	app.Run()
+	jwtM := boostrap.JWTManagerWithHS256([]byte(cfg.JWT.Secret))
+
+	gs := boostrap.SetupSupervisor(ctx, log)
+
+	app := httpserver.NewServerApp(&cfg.HTTP, &cfg.CORS, log, repo, repo, gc, lfs, rlm, jwtM, smtp)
+	// TODO: reformat whole code to your new standard
+	gs.Go("HTTP-server", app.Start)
+
+	err = gs.Wait()
+	if err != nil {
+		return fmt.Errorf("gs wait error: %s", err)
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	app.Stop(shutdownCtx)
+
+	return nil
 }

@@ -6,95 +6,100 @@ import (
 	"math/big"
 	"net/mail"
 	"net/smtp"
-	"strconv"
-	"time"
 
-	"github.com/ayayaakasvin/oneflick-ticket/internal/config"
-	"github.com/ayayaakasvin/oneflick-ticket/internal/models/inner"
 	"github.com/ayayaakasvin/oneflick-ticket/mailtemplates"
 )
 
 const (
-	min = 100000
-	max = 999999
-	origin = "SMTP"
+	max = 1_000_000
 )
 
-type SMTPTool struct {
+type SMTP_Client struct {
 	auth smtp.Auth
 
-	cfg *config.SMTPConfig
+	username string
+	password string
+	host     string
+	port     int
 }
 
-func NewSMTPTool(cfg *config.SMTPConfig) *SMTPTool {
+func NewSMTPTool(
+	username string,
+	password string,
+	host string,
+	port int,
+) *SMTP_Client {
 	auth := smtp.PlainAuth(
 		"",
-		cfg.Username,
-		cfg.Password,
-		cfg.Host,
+		username,
+		password,
+		host,
 	)
 
-	return &SMTPTool{
-		auth: auth,
-		cfg:  cfg,
+	return &SMTP_Client{
+		auth:     auth,
+		username: username,
+		password: password,
+		host:     host,
+		port:     port,
 	}
 }
 
-
-func NewSMTPToolWithPreHealthCheck(cfg *config.SMTPConfig, shutdownChannel inner.ShutdownChannel) *SMTPTool {
-	s := NewSMTPTool(cfg)
+func NewSMTPToolWithPreHealthCheck(
+	username string,
+	password string,
+	host string,
+	port int,
+) (*SMTP_Client, error) {
+	s := NewSMTPTool(username, password, host, port)
 
 	err := s.HealthCheck()
 	if err != nil {
-		msg := fmt.Sprintf("failed to healthcheck to SMTP: %v\n", err)
-		shutdownChannel.Send(inner.ShutdownMessage, origin, msg)
-		return nil
+		return nil, fmt.Errorf("failed to healthcheck to SMTP: %v\n", err)
 	}
 
-	return s
+	return s, nil
 }
 
-func (s *SMTPTool) GenerateRandomSequence() int {
-	nBig, err := rand.Int(rand.Reader, big.NewInt(max+1-min))
+func (s *SMTP_Client) GenerateRandomSequence() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(9_000_000))
 	if err != nil {
-		return int(time.Now().UnixNano()%(max+1-min)) + min
+		return "", err
 	}
 
-	return min + int(nBig.Int64())
+	return fmt.Sprintf("%07d", n.Int64()+max), nil
 }
 
-func (s *SMTPTool) SendCode(subject string, code int, to []string) error {
-	codeStr := strconv.Itoa(code)
-
-	msg := fmt.Sprintf(mailtemplates.MailTemplate, subject, codeStr, codeStr)
+func (s *SMTP_Client) SendCode(subject string, code string, to []string) error {
+	msg := fmt.Sprintf(mailtemplates.MailTemplate, subject, code, code)
 
 	err := smtp.SendMail(
-		fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port),
+		fmt.Sprintf("%s:%d", s.host, s.port),
 		s.auth,
-		s.cfg.Username,
+		s.username,
 		to,
 		[]byte(msg),
 	)
 	if err != nil {
 		return err
-	}	
+	}
 
 	return nil
 }
 
-func (s *SMTPTool) ValidateEmail(address string) bool {
+func (s *SMTP_Client) ValidateEmail(address string) bool {
 	_, err := mail.ParseAddress(address)
 	return err == nil
 }
 
-func (s *SMTPTool) HealthCheck() error {
-	from := s.cfg.Username
+func (s *SMTP_Client) HealthCheck() error {
+	from := s.username
 	to := []string{from}
 
 	msg := []byte("Subject: SMTP Health Check\r\n\r\nThis is a test.")
 
 	err := smtp.SendMail(
-		fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port),
+		fmt.Sprintf("%s:%d", s.host, s.port),
 		s.auth,
 		from,
 		to,

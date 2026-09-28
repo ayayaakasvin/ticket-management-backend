@@ -5,9 +5,8 @@ import (
 	"strings"
 
 	"github.com/ayayaakasvin/oneflick-ticket/internal/http-server/ctx"
-	"github.com/ayayaakasvin/oneflick-ticket/internal/lib/jwttool"
-	"github.com/ayayaakasvin/oneflick-ticket/internal/models/response"
-	"github.com/redis/go-redis/v9"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/http-server/helper"
+	"github.com/ayayaakasvin/oneflick-ticket/internal/http-server/token"
 )
 
 const (
@@ -29,44 +28,40 @@ func (m *Middlewares) JWTAuthMiddleware(next http.HandlerFunc) http.HandlerFunc 
 			return
 		}
 
-		claims, err := jwttool.ValidateJWT(tokenString)
+		cl, err := m.jwtM.Validate(tokenString, &token.AccessTokenClaims{})
 		if err != nil {
 			unauthorized(w, "failed to validate jwt")
 			return
 		}
 
-		sessionIdAny, exists := claims["session_id"]
-		if !exists {
+		fullClaims, ok := cl.(*token.AccessTokenClaims)
+		if !ok {
+			unauthorized(w, "invalid claims")
+			return
+		}
+
+		if fullClaims.SessionID == "" {
 			unauthorized(w, "session_id missing")
 			return
 		}
 
-		sessionId := sessionIdAny.(string)
-
-		if _, err := m.cache.Get(r.Context(), sessionId); err == redis.Nil {
+		if _, err := m.cc.Get(r.Context(), fullClaims.SessionID); err != nil {
 			unauthorized(w, "session is expired")
 			return
 		}
 
-		userIdAny, ok := claims["user_id"]
-		if !ok || userIdAny == nil {
-			unauthorized(w, "user_id missing")
+		if fullClaims.UserID == 0 {
+			unauthorized(w, "user_id missing or invalid")
 			return
 		}
 
-		userIdInt, err := jwttool.FetchUserID(userIdAny)
-		if err != nil {
-			unauthorized(w, "user_id is invalid")
-			return
-		}
-
-		r = ctx.WrapValueIntoRequest(r, ctx.CtxUserIDKey, userIdInt)
-		r = ctx.WrapValueIntoRequest(r, ctx.CtxSessionIDKey, sessionId)
+		r = ctx.WrapValueIntoRequest(r, ctx.CtxUserIDKey, fullClaims.UserID)
+		r = ctx.WrapValueIntoRequest(r, ctx.CtxSessionIDKey, fullClaims.SessionID)
 
 		next(w, r)
 	}
 }
 
-func unauthorized(w http.ResponseWriter, msg string)  {
-	response.SendErrorJson(w, http.StatusUnauthorized, "%s", msg)
+func unauthorized(w http.ResponseWriter, msg string) {
+	helper.WriteJSONResponse(w, http.StatusUnauthorized, map[string]string{"error": msg})
 }
